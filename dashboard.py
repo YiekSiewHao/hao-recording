@@ -74,27 +74,79 @@ st.markdown("""
   background: #426b9c !important;
   color: #FFFFFF !important;
 }
-/* Keep title and both action icons on ONE line on narrow screens. */
+/* Sidebar recording cards: title on first row, time and actions on second. */
+[data-testid="stSidebar"] [class*="st-key-record_row_"] {
+  padding: .65rem .55rem .75rem !important;
+  margin-bottom: .38rem !important;
+  border: 1px solid #2b405d;
+  background: rgba(255,255,255,.035);
+  border-radius: 12px;
+}
+[data-testid="stSidebar"] [class*="st-key-record_row_"]:hover {
+  background: rgba(255,255,255,.065);
+}
+[data-testid="stSidebar"] [class*="st-key-record_row_"] .stButton > button {
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+/* Main title separated from its controls so it cannot squeeze on phones. */
+.st-key-selected_record_header h1 {
+  font-size: clamp(1.35rem, 4vw, 2rem) !important;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+  margin-bottom: .25rem;
+}
+/* Precise square action controls for the sidebar and the main page. */
 [class*="st-key-record_row_"] [data-testid="stHorizontalBlock"],
-.st-key-selected_record_header [data-testid="stHorizontalBlock"] {
+.st-key-record_actions [data-testid="stHorizontalBlock"] {
   flex-wrap: nowrap !important;
   align-items: center !important;
-  gap: .30rem !important;
+  gap: .42rem !important;
 }
 [class*="st-key-record_row_"] [data-testid="stColumn"],
-.st-key-selected_record_header [data-testid="stColumn"] {
+.st-key-record_actions [data-testid="stColumn"] {
   min-width: 0 !important;
-  flex-shrink: 1 !important;
 }
-[class*="st-key-record_row_"] .stButton > button {
-  min-height: 2.2rem !important;
-  padding: .15rem .25rem !important;
-  overflow: hidden !important;
+[class*="st-key-record_row_"] [data-testid="stColumn"]:not(:first-child),
+.st-key-record_actions [data-testid="stColumn"]:not(:first-child) {
+  flex: 0 0 2.25rem !important;
+  width: 2.25rem !important;
+}
+[class*="st-key-record_row_"] [data-testid="stColumn"]:not(:first-child) .stButton > button,
+.st-key-record_actions [data-testid="stColumn"]:not(:first-child) .stButton > button {
+  width: 2.25rem !important;
+  min-width: 2.25rem !important;
+  max-width: 2.25rem !important;
+  height: 2.25rem !important;
+  min-height: 2.25rem !important;
+  max-height: 2.25rem !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  line-height: 1 !important;
+  font-size: 1.15rem !important;
+}
+[class*="st-key-record_row_"] [data-testid="stColumn"]:not(:first-child) .stButton > button p,
+.st-key-record_actions [data-testid="stColumn"]:not(:first-child) .stButton > button p {
+  margin: 0 !important;
+  white-space: nowrap !important;
+  line-height: 1 !important;
+}
+[class*="st-key-record_row_"] .stButton > button[kind="secondary"] {
+  border-color: #344b69;
 }
 [class*="st-key-record_row_"] [data-testid="stColumn"]:first-child .stButton > button {
   width: 100% !important;
+  padding: .3rem .35rem !important;
+  background: transparent !important;
+  border-color: transparent !important;
   justify-content: flex-start !important;
   text-align: left !important;
+  height: auto !important;
+  min-height: 2rem !important;
+  font-size: .95rem !important;
+  font-weight: 600;
 }
 [class*="st-key-record_row_"] [data-testid="stColumn"]:first-child .stButton > button p {
   overflow: hidden !important;
@@ -102,19 +154,25 @@ st.markdown("""
   white-space: nowrap !important;
   display: block !important;
 }
-.st-key-selected_record_header h1 {
-  font-size: clamp(1.2rem, 4vw, 2rem) !important;
-  overflow-wrap: anywhere;
-  margin: 0;
-}
-.st-key-selected_record_header .stButton > button {
-  min-height: 2.4rem !important;
-  padding: .2rem .3rem !important;
+.sidebar-record-time {
+  display: flex; align-items: center;
+  min-height: 2.25rem;
+  font-size: .75rem; color: #a9b9d1;
+  white-space: nowrap;
 }
 @media (max-width: 640px) {
-  .block-container {padding-left: 1rem; padding-right: 1rem; padding-top: 1rem;}
-  [data-testid="stSidebar"] [data-testid="stSidebarContent"] {padding-left: .65rem; padding-right: .65rem;}
-  .st-key-selected_record_header [data-testid="stColumn"]:first-child {flex-grow: 1 !important;}
+  /* Space for the fixed Streamlit menu / Deploy / Share toolbar. */
+  .block-container {
+    padding-top: 4.5rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+  [data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+    padding-left: .75rem !important;
+    padding-right: .75rem !important;
+    padding-top: 2.4rem !important;
+  }
+  .st-key-selected_record_header h1 {font-size: 1.55rem !important;}
 }
 </style>
 """, unsafe_allow_html=True)
@@ -294,12 +352,22 @@ with st.sidebar:
             title = suggested_title(r)
             # A keyed container enables phone-specific no-wrap CSS.
             with st.container(key="record_row_" + re.sub(r"[^A-Za-z0-9_]", "_", str(r["id"]))):
-                name_col, fav_col, rename_col = st.columns([0.74, 0.13, 0.13], gap="small")
-                with name_col:
-                    if st.button(title, key="select_" + r["id"], use_container_width=True):
-                        st.session_state.selected_id = r["id"]
-                        st.session_state["renaming"] = False
-                        st.rerun()
+                # First row: recording name, with comfortable tap target.
+                if st.button(title, key="select_" + r["id"], use_container_width=True):
+                    st.session_state.selected_id = r["id"]
+                    st.session_state["renaming"] = False
+                    st.rerun()
+                # Second row: time left, square favorite/rename buttons right.
+                time_col, fav_col, rename_col = st.columns(
+                    [0.70, 0.15, 0.15], gap="small", vertical_alignment="center"
+                )
+                with time_col:
+                    st.markdown(
+                        '<div class="sidebar-record-time">'
+                        + escape(timestamp_label(r)) + ' · '
+                        + escape(display_clock(timestamp_for(r)))
+                        + '</div>', unsafe_allow_html=True
+                    )
                 with fav_col:
                     if st.button("★" if r.get("starred") else "☆", key="fav_" + r["id"], help="Toggle favorite", use_container_width=True):
                         try:
@@ -312,7 +380,6 @@ with st.sidebar:
                         st.session_state.selected_id = r["id"]
                         st.session_state["renaming"] = True
                         st.rerun()
-                st.caption(f"{timestamp_label(r)} · {display_clock(timestamp_for(r))}")
 
     if not visible:
         st.info("No recordings match your search.")
@@ -324,9 +391,13 @@ if chosen is None:
 
 name = suggested_title(chosen)
 with st.container(key="selected_record_header"):
-    head, star_col, edit_col = st.columns([0.78, 0.11, 0.11], gap="small", vertical_alignment="center")
-    with head:
-        st.title(name)
+    st.title(name)
+
+# Keep actions in their own row, so the title never overlaps or wraps around icons.
+with st.container(key="record_actions"):
+    spacer_col, star_col, edit_col = st.columns(
+        [0.70, 0.15, 0.15], gap="small", vertical_alignment="center"
+    )
     with star_col:
         if st.button("★" if chosen.get("starred") else "☆", help="Toggle favorite", key="star_selected", use_container_width=True):
             try:
