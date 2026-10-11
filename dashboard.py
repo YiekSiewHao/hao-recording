@@ -6,6 +6,7 @@ from html import escape
 
 import requests
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="Hao Recording", page_icon="🎙️", layout="wide")
 
@@ -307,6 +308,11 @@ def as_items(value):
             out.append(str(item.get("text") or item.get("task") or item))
     return out
 
+
+# Poll for new recordings every 30 seconds without a manual browser refresh.
+# Pause while the rename form is open to avoid interrupting user input.
+if not st.session_state.get("renaming", False):
+    st_autorefresh(interval=30_000, limit=None, key="hao_recordings_auto_refresh")
 
 try:
     recordings = fetch_recordings()
