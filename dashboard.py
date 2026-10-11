@@ -1,11 +1,15 @@
 import re
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+from html import escape
 
 import requests
 import streamlit as st
 
 st.set_page_config(page_title="Hao Recording", page_icon="🎙️", layout="wide")
+
+DISPLAY_TZ = ZoneInfo("America/New_York")  # User local time; change if you move time zones.
 
 BASE_URL = st.secrets["SUPABASE_URL"].rstrip("/")
 API_KEY = st.secrets["SUPABASE_KEY"]
@@ -55,6 +59,63 @@ st.markdown("""
   letter-spacing: .1em; margin: 1rem 0 .25rem;}
 .meta-line {color: #798292; font-size: .84rem; margin-top: -.5rem;}
 .section-heading {font-size: 1rem; font-weight: 650; margin-top: 1.4rem;}
+/* Transcript: crisp white text, even when the widget is read-only/disabled. */
+[data-testid="stTextArea"] textarea,
+[data-testid="stTextArea"] textarea:disabled {
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  background-color: #162338 !important;
+  opacity: 1 !important;
+  border: 1px solid #425574 !important;
+  font-weight: 450 !important;
+  line-height: 1.7 !important;
+}
+[data-testid="stTextArea"] textarea:disabled::selection {
+  background: #426b9c !important;
+  color: #FFFFFF !important;
+}
+/* Keep title and both action icons on ONE line on narrow screens. */
+[class*="st-key-record_row_"] [data-testid="stHorizontalBlock"],
+.st-key-selected_record_header [data-testid="stHorizontalBlock"] {
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: .30rem !important;
+}
+[class*="st-key-record_row_"] [data-testid="stColumn"],
+.st-key-selected_record_header [data-testid="stColumn"] {
+  min-width: 0 !important;
+  flex-shrink: 1 !important;
+}
+[class*="st-key-record_row_"] .stButton > button {
+  min-height: 2.2rem !important;
+  padding: .15rem .25rem !important;
+  overflow: hidden !important;
+}
+[class*="st-key-record_row_"] [data-testid="stColumn"]:first-child .stButton > button {
+  width: 100% !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+}
+[class*="st-key-record_row_"] [data-testid="stColumn"]:first-child .stButton > button p {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  display: block !important;
+}
+.st-key-selected_record_header h1 {
+  font-size: clamp(1.2rem, 4vw, 2rem) !important;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.st-key-selected_record_header .stButton > button {
+  min-height: 2.4rem !important;
+  padding: .2rem .3rem !important;
+}
+@media (max-width: 640px) {
+  .block-container {padding-left: 1rem; padding-right: 1rem; padding-top: 1rem;}
+  [data-testid="stSidebar"] [data-testid="stSidebarContent"] {padding-left: .65rem; padding-right: .65rem;}
+  .st-key-selected_record_header [data-testid="stColumn"]:first-child {flex-grow: 1 !important;}
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -90,9 +151,22 @@ def parse_datetime(value):
     if not value:
         return None
     try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        # Supabase timestamps include offsets. Treat legacy naive timestamps as UTC.
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(DISPLAY_TZ)
     except (ValueError, TypeError):
         return None
+
+
+def timestamp_for(record):
+    # Never claim that cloud upload time is the true recording time.
+    return record.get("recorded_at") or record.get("created_at")
+
+
+def timestamp_label(record):
+    return "Recorded" if record.get("recorded_at") else "Uploaded"
 
 
 def display_clock(value):
@@ -104,15 +178,17 @@ def date_group(value):
     dt = parse_datetime(value)
     if not dt:
         return "Undated"
-    # Recorded timestamps are grouped by their stored offset; fallback is upload time.
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(DISPLAY_TZ).date()
     if dt.date() == today:
         return "Today"
-    from datetime import timedelta
     if dt.date() == today - timedelta(days=1):
         return "Yesterday"
     return dt.strftime("%A, %b %-d, %Y")
 
+
+def sort_timestamp(record):
+    dt = parse_datetime(timestamp_for(record))
+    return dt.timestamp() if dt else 0
 
 def sections_from_markdown(md):
     """Split Markdown summary on #/##/### or standalone bold headings."""
@@ -186,9 +262,16 @@ if "selected_id" not in st.session_state and recordings:
 with st.sidebar:
     st.title("🎙️ Hao Recording")
     st.caption("Your private recording library")
+    today = datetime.now(DISPLAY_TZ).date()
+    uploaded_today = sum(
+        parse_datetime(r.get("created_at")) is not None
+        and parse_datetime(r.get("created_at")).date() == today
+        for r in recordings
+    )
     c1, c2 = st.columns(2)
     c1.metric("Recordings", len(recordings))
-    c2.metric("Starred", sum(bool(r.get("starred")) for r in recordings))
+    c2.metric("Uploaded today", uploaded_today)
+    st.caption(f"★ {sum(bool(r.get('starred')) for r in recordings)} starred · {today.strftime('%b %-d, %Y')} (New York time)")
     search = st.text_input("Search", placeholder="Search titles and notes…")
     show_starred = st.toggle("Starred only", value=False)
     st.divider()
@@ -202,32 +285,34 @@ with st.sidebar:
         visible.append(r)
 
     grouped = defaultdict(list)
-    for r in visible:
-        grouped[date_group(r.get("recorded_at") or r.get("created_at"))].append(r)
+    for r in sorted(visible, key=sort_timestamp, reverse=True):
+        grouped[date_group(timestamp_for(r))].append(r)
 
     for group_name, items in grouped.items():
         st.markdown(f'<div class="small-label">{group_name.upper()}</div>', unsafe_allow_html=True)
         for r in items:
             title = suggested_title(r)
-            name_col, fav_col, rename_col = st.columns([7, 1.4, 1.4], gap="small")
-            with name_col:
-                if st.button(title, key="select_" + r["id"], use_container_width=True):
-                    st.session_state.selected_id = r["id"]
-                    st.session_state["renaming"] = False
-                    st.rerun()
-            with fav_col:
-                if st.button("★" if r.get("starred") else "☆", key="fav_" + r["id"], help="Toggle favorite"):
-                    try:
-                        update_recording(r["id"], {"starred": not bool(r.get("starred"))})
+            # A keyed container enables phone-specific no-wrap CSS.
+            with st.container(key="record_row_" + re.sub(r"[^A-Za-z0-9_]", "_", str(r["id"]))):
+                name_col, fav_col, rename_col = st.columns([0.74, 0.13, 0.13], gap="small")
+                with name_col:
+                    if st.button(title, key="select_" + r["id"], use_container_width=True):
+                        st.session_state.selected_id = r["id"]
+                        st.session_state["renaming"] = False
                         st.rerun()
-                    except Exception:
-                        st.error("Could not update favorite.")
-            with rename_col:
-                if st.button("✎", key="rename_" + r["id"], help="Rename"):
-                    st.session_state.selected_id = r["id"]
-                    st.session_state["renaming"] = True
-                    st.rerun()
-            st.caption("   " + display_clock(r.get("recorded_at") or r.get("created_at")))
+                with fav_col:
+                    if st.button("★" if r.get("starred") else "☆", key="fav_" + r["id"], help="Toggle favorite", use_container_width=True):
+                        try:
+                            update_recording(r["id"], {"starred": not bool(r.get("starred"))})
+                            st.rerun()
+                        except Exception:
+                            st.error("Could not update favorite.")
+                with rename_col:
+                    if st.button("✎", key="rename_" + r["id"], help="Rename", use_container_width=True):
+                        st.session_state.selected_id = r["id"]
+                        st.session_state["renaming"] = True
+                        st.rerun()
+                st.caption(f"{timestamp_label(r)} · {display_clock(timestamp_for(r))}")
 
     if not visible:
         st.info("No recordings match your search.")
@@ -238,19 +323,20 @@ if chosen is None:
     st.stop()
 
 name = suggested_title(chosen)
-head, star_col, edit_col = st.columns([8, 1, 1], vertical_alignment="center")
-with head:
-    st.title(name)
-with star_col:
-    if st.button("★" if chosen.get("starred") else "☆", help="Toggle favorite", key="star_selected"):
-        try:
-            update_recording(chosen["id"], {"starred": not bool(chosen.get("starred"))})
-            st.rerun()
-        except Exception:
-            st.error("Could not update favorite.")
-with edit_col:
-    if st.button("✎", help="Rename recording", key="edit_selected"):
-        st.session_state["renaming"] = not st.session_state.get("renaming", False)
+with st.container(key="selected_record_header"):
+    head, star_col, edit_col = st.columns([0.78, 0.11, 0.11], gap="small", vertical_alignment="center")
+    with head:
+        st.title(name)
+    with star_col:
+        if st.button("★" if chosen.get("starred") else "☆", help="Toggle favorite", key="star_selected", use_container_width=True):
+            try:
+                update_recording(chosen["id"], {"starred": not bool(chosen.get("starred"))})
+                st.rerun()
+            except Exception:
+                st.error("Could not update favorite.")
+    with edit_col:
+        if st.button("✎", help="Rename recording", key="edit_selected", use_container_width=True):
+            st.session_state["renaming"] = not st.session_state.get("renaming", False)
 
 if st.session_state.get("renaming"):
     with st.form("rename_form"):
@@ -267,11 +353,14 @@ if st.session_state.get("renaming"):
                 st.warning("Enter a recording name.")
 
 st.markdown(
-    f'<div class="meta-line">{date_group(chosen.get("recorded_at") or chosen.get("created_at"))}'
-    f' · {display_clock(chosen.get("recorded_at") or chosen.get("created_at"))}'
-    f' · {chosen.get("category") or "Other"}</div>',
+    '<div class="meta-line">'
+    + escape(timestamp_label(chosen)) + ' · '
+    + escape(date_group(timestamp_for(chosen))) + ' · '
+    + escape(display_clock(timestamp_for(chosen))) + ' · '
+    + escape(chosen.get("category") or "Other") + '</div>',
     unsafe_allow_html=True,
 )
+
 st.divider()
 
 parsed = sections_from_markdown(chosen.get("summary") or "")
