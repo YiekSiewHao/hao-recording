@@ -14,10 +14,45 @@ HEADERS = {"apikey": API_KEY}
 
 st.markdown("""
 <style>
-.block-container {max-width: 1040px; padding-top: 2rem;}
-[data-testid="stSidebar"] {background: #f8f9fb;}
-[data-testid="stSidebar"] .stButton button {text-align: left; justify-content: flex-start;}
-.small-label {color: #7c8595; font-size: .78rem; font-weight: 600; letter-spacing: .08em;}
+/* Hao Recording — midnight-blue navigation with a calm reading surface */
+.block-container {max-width: 1120px; padding-top: 2rem;}
+[data-testid="stSidebar"] {
+  background: linear-gradient(160deg, #15233b 0%, #101b2e 65%, #0b1424 100%) !important;
+  border-right: 1px solid #253751;
+}
+[data-testid="stSidebar"] [data-testid="stSidebarContent"] {color: #e9effa;}
+[data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3, [data-testid="stSidebar"] p,
+[data-testid="stSidebar"] label, [data-testid="stSidebar"] span,
+[data-testid="stSidebar"] [data-testid="stMetricValue"],
+[data-testid="stSidebar"] [data-testid="stMetricLabel"] {color: #e9effa !important;}
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
+  color: #a9b9d1 !important;
+}
+[data-testid="stSidebar"] [data-testid="stMetric"] {
+  background: #1b2d47; border: 1px solid #2c4362;
+  border-radius: 12px; padding: 11px 12px;
+}
+[data-testid="stSidebar"] [data-testid="stMetricValue"] {
+  font-size: 1.5rem;
+}
+[data-testid="stSidebar"] .stButton > button {
+  color: #e9effa !important; background: #20334d !important;
+  border: 1px solid #344b69 !important; border-radius: 9px;
+  text-align: left; justify-content: flex-start;
+}
+[data-testid="stSidebar"] .stButton > button:hover {
+  background: #2b4565 !important; border-color: #7fa9db !important;
+}
+[data-testid="stSidebar"] .stTextInput input {
+  color: #f4f7ff !important; background: #1b2d47 !important;
+  border: 1px solid #354d6c !important;
+}
+[data-testid="stSidebar"] .stTextInput input::placeholder {color: #aebed5 !important;}
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {color: #c6d3e6 !important;}
+[data-testid="stSidebar"] hr {border-color: #34465d;}
+.small-label {color: #8eb5ed; font-size: .74rem; font-weight: 700;
+  letter-spacing: .1em; margin: 1rem 0 .25rem;}
 .meta-line {color: #798292; font-size: .84rem; margin-top: -.5rem;}
 .section-heading {font-size: 1rem; font-weight: 650; margin-top: 1.4rem;}
 </style>
